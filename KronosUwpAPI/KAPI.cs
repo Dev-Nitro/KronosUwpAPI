@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -260,12 +260,23 @@ public class KAPI
 	{
 		if (latestDataCache == null)
 		{
-			string text = ReadURL("https://cdn.wearedevs.net/software/exploitapi/latestdata.json");
-			if (text.Length <= 0)
-			{
-				text = ReadURL("https://raw.githubusercontent.com/WeAreDevs-Official/backups/master/wrdeapi.json");
+			string apidownload = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
+			JObject downloadtype = JObject.Parse(apidownload);
+			bool WrdDownload = (bool)downloadtype["WrdDownload"];
+
+			if (WrdDownload)
+            {
+				string text = ReadURL("https://cdn.wearedevs.net/software/exploitapi/latestdata.json");
+				if (text.Length <= 0)
+				{
+					text = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
+				}
+				latestDataCache = JObject.Parse(text);
 			}
-			latestDataCache = JObject.Parse(text);
+            else
+            {
+				latestDataCache = downloadtype;
+            }
 		}
 		return latestDataCache;
 	}
@@ -291,9 +302,9 @@ public class KAPI
 				Client.DownloadFile((string)latestData["injDep"], ApiPath);
 			}
 		}
-        catch
+        catch(Exception ex)
         {
-			MessageBox.Show("Failed to download 1 or more files", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show("Failed to download 1 or more files\n" + ex.ToString(), "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
 		create_files(Path.GetFullPath("Module.dll"));
 	}
