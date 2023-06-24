@@ -265,7 +265,7 @@ public class KAPI
 			bool WrdDownload = (bool)downloadtype["WrdDownload"];
 
 			if (WrdDownload)
-            {
+            		{
 				string text = ReadURL("https://cdn.wearedevs.net/software/exploitapi/latestdata.json");
 				if (text.Length <= 0)
 				{
@@ -284,9 +284,9 @@ public class KAPI
 
 	private static string ApiPath = "KFluxAPI.dll";
 	public void DownloadLatestDll()
-    {
+    	{
         try
-        {
+        	{
 			string text = (string)GetLatestData()["exploit-module"][(object)"download"];
 			if (text.Length > 0)
 			{
