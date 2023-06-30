@@ -184,7 +184,7 @@ public class KAPI
 			}
 			if (!is_injected())
 			{
-				MessageBox.Show("Please inject Kronos.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show("Please inject before executing a script.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				return false;
 			}
 			run_script(script);
@@ -260,23 +260,23 @@ public class KAPI
 	{
 		if (latestDataCache == null)
 		{
-			string apiDownload = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
-        		JObject downloadType = JObject.Parse(apiDownload);
-        		bool wrdDownload = (bool)downloadType["WrdDownload"];
-		
-        		if (wrdDownload)
-        		{
-         		   string text = ReadURL("https://cdn.wearedevs.net/software/exploitapi/latestdata.json");
-         		   if (string.IsNullOrEmpty(text))
-         		   {
-         		       text = apiDownload;
-         		   }
-         		   latestDataCache = JObject.Parse(text);
-        		}
-            		else
-            		{
+			string apidownload = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
+			JObject downloadtype = JObject.Parse(apidownload);
+			bool WrdDownload = (bool)downloadtype["WrdDownload"];
+
+			if (WrdDownload)
+            {
+				string text = ReadURL("https://cdn.wearedevs.net/software/exploitapi/latestdata.json");
+				if (text.Length <= 0)
+				{
+					text = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
+				}
+				latestDataCache = JObject.Parse(text);
+			}
+            else
+            {
 				latestDataCache = downloadtype;
-            		}
+            }
 		}
 		return latestDataCache;
 	}
@@ -284,9 +284,9 @@ public class KAPI
 
 	private static string ApiPath = "KFluxAPI.dll";
 	public void DownloadLatestDll()
-    	{
+    {
         try
-        	{
+        {
 			string text = (string)GetLatestData()["exploit-module"][(object)"download"];
 			if (text.Length > 0)
 			{
