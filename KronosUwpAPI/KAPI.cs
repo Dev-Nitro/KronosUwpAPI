@@ -58,10 +58,10 @@ public class KAPI
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttribute, IntPtr dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
 
-	[DllImport("KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
+	[DllImport("bin\\KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
 	private static extern bool run_script(IntPtr proc, int pid, string path, [MarshalAs(UnmanagedType.LPWStr)] string script);
 
-	[DllImport("KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
+	[DllImport("bin\\KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
 	private static extern bool is_injected(IntPtr proc, int pid, string path);
 
 	private static Result r_inject(string dll_path)
@@ -194,7 +194,6 @@ public class KAPI
 		{
 			return false;
 		}
-		return false;
 	}
 	public static Task<bool> Inject()
 	{
@@ -207,6 +206,7 @@ public class KAPI
 				Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
 				if (processesByName.Length < 1)
 				{
+					MessageBox.Show("Failure to find UWP game!\n\nPlease make sure you are using Roblox from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 					result.SetResult(result: false);
 				}
 				else
@@ -265,28 +265,29 @@ public class KAPI
 			bool WrdDownload = (bool)downloadtype["WrdDownload"];
 
 			if (WrdDownload)
-            {
-				string text = ReadURL("https://cdn.wearedevs.net/software/exploitapi/latestdata.json");
+            		{
+				string text = ReadURL("https://cdn.wearedevs.net/software/jjsploit/latestdata.txt");
 				if (text.Length <= 0)
 				{
 					text = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
 				}
 				latestDataCache = JObject.Parse(text);
 			}
-            else
-            {
+            		else
+            		{
 				latestDataCache = downloadtype;
-            }
+            		}
 		}
 		return latestDataCache;
 	}
-	private static string DLLPath = "Module.dll";
+	private static string DLLPath = "bin\\Module.dll";
 
-	private static string ApiPath = "KFluxAPI.dll";
+	private static string ApiPath = "bin\\KFluxAPI.dll";
 	public void DownloadLatestDll()
-    {
-        try
-        {
+    	{
+        	try
+        	{
+			Directory.CreateDirectory("bin");
 			string text = (string)GetLatestData()["exploit-module"][(object)"download"];
 			if (text.Length > 0)
 			{
@@ -302,11 +303,11 @@ public class KAPI
 				Client.DownloadFile((string)latestData["injDep"], ApiPath);
 			}
 		}
-        catch(Exception ex)
-        {
+        	catch(Exception ex)
+        	{	
 			MessageBox.Show("Failed to download 1 or more files\n" + ex.ToString(), "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
-		create_files(Path.GetFullPath("Module.dll"));
+		create_files(Path.GetFullPath(DLLPath));
 	}
 
 	private static void create_files(string dll_path_)
