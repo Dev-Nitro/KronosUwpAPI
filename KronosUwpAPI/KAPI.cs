@@ -134,22 +134,22 @@ public class KAPI
 		switch (inject_custom())
 		{
 			case Result.DLLNotFound:
-				MessageBox.Show("Injection Failed! DLL not found!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Injection Failed! DLL not found!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				break;
 			case Result.OpenProcFail:
-				MessageBox.Show("Injection Failed - OpenProcFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - OpenProcFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				break;
 			case Result.AllocFail:
-				MessageBox.Show("Injection Failed - AllocFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - AllocFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				break;
 			case Result.LoadLibFail:
-				MessageBox.Show("Injection Failed - LoadLibFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - LoadLibFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				break;
 			case Result.ProcNotOpen:
-				MessageBox.Show("Failure to find UWP game!\n\nPlease make sure you are using the game from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using the game from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				break;
 			case Result.Unknown:
-				MessageBox.Show("Injection Failed - Unknown!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - Unknown!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				break;
 			case Result.AlreadyInjected:
 				break;
@@ -164,7 +164,7 @@ public class KAPI
 	{
 		if (pid == 0)
 		{
-			MessageBox.Show("Please press Inject first!", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show(new Form { TopMost = true }, "Please press Inject first!", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return false;
 		}
 		if (script == string.Empty)
@@ -179,12 +179,12 @@ public class KAPI
 		{
 			if (Process.GetProcessesByName("Windows10Universal").Length < 1)
 			{
-				MessageBox.Show("Please open Microsoft Store Version of ROBLOX before executing.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Please open Microsoft Store Version of ROBLOX before executing.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				return false;
 			}
 			if (!is_injected())
 			{
-				MessageBox.Show("Please inject before executing a script.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				return false;
 			}
 			run_script(script);
@@ -206,7 +206,7 @@ public class KAPI
 				Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
 				if (processesByName.Length < 1)
 				{
-					MessageBox.Show("Failure to find UWP game!\n\nPlease make sure you are using Roblox from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+					MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using Roblox from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 					result.SetResult(result: false);
 				}
 				else
@@ -223,7 +223,7 @@ public class KAPI
 							}
 							if (attempts >= 5)
 							{
-								MessageBox.Show("KAPI is taking longer then normal to Inject. Maybe try reinjecting?", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+								MessageBox.Show(new Form { TopMost = true }, "KAPI is taking longer then normal to Inject. Maybe try reinjecting?", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 								result.SetResult(result: false);
 							}
 							else
@@ -239,7 +239,7 @@ public class KAPI
 							return;
 						}
 					}
-					MessageBox.Show("Already Injected!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+					MessageBox.Show(new Form { TopMost = true }, "Already Injected!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 					result.SetResult(result: false);
 				}
 			}).Start();
@@ -265,7 +265,7 @@ public class KAPI
 			bool WrdDownload = (bool)downloadtype["WrdDownload"];
 
 			if (WrdDownload)
-            		{
+            {
 				string text = ReadURL("https://cdn.wearedevs.net/software/jjsploit/latestdata.txt");
 				if (text.Length <= 0)
 				{
@@ -273,10 +273,10 @@ public class KAPI
 				}
 				latestDataCache = JObject.Parse(text);
 			}
-            		else
-            		{
+            else
+            {
 				latestDataCache = downloadtype;
-            		}
+            }
 		}
 		return latestDataCache;
 	}
@@ -284,9 +284,9 @@ public class KAPI
 
 	private static string ApiPath = "bin\\KFluxAPI.dll";
 	public void DownloadLatestDll()
-    	{
-        	try
-        	{
+    {
+        try
+        {
 			Directory.CreateDirectory("bin");
 			string text = (string)GetLatestData()["exploit-module"][(object)"download"];
 			if (text.Length > 0)
@@ -303,9 +303,9 @@ public class KAPI
 				Client.DownloadFile((string)latestData["injDep"], ApiPath);
 			}
 		}
-        	catch(Exception ex)
-        	{	
-			MessageBox.Show("Failed to download 1 or more files\n" + ex.ToString(), "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        catch(Exception ex)
+        {
+			MessageBox.Show(new Form { TopMost = true }, "Failed to download 1 or more files\n" + ex.ToString(), "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
 		create_files(Path.GetFullPath(DLLPath));
 	}
@@ -314,7 +314,7 @@ public class KAPI
 	{
 		if (!File.Exists(dll_path_))
 		{
-			MessageBox.Show("Failure to initalize API!\nDLL path was invalid!", "Fatal Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show(new Form { TopMost = true }, "Failure to initalize API!\nDLL path was invalid!", "Fatal Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			Environment.Exit(0);
 		}
 		dll_path = dll_path_;
@@ -344,7 +344,7 @@ public class KAPI
 		}
 		catch
 		{
-			MessageBox.Show("Failure to Create new Folders", "KAPI Download", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show(new Form { TopMost = true }, "Failure to Create new Folders", "KAPI Download", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
 		string text3 = Path.Combine(text, "workspace");
 		string text4 = Path.Combine(text, "autoexec");
