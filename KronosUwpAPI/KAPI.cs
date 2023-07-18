@@ -66,50 +66,65 @@ public class KAPI
 
 	private static Result r_inject(string dll_path)
 	{
-		FileInfo fileInfo = new FileInfo(dll_path);
-		FileSecurity accessControl = fileInfo.GetAccessControl();
+		FileSecurity accessControl = File.GetAccessControl(dll_path);
 		SecurityIdentifier identity = new SecurityIdentifier("S-1-15-2-1");
-		accessControl.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, InheritanceFlags.None, PropagationFlags.NoPropagateInherit, AccessControlType.Allow));
-		fileInfo.SetAccessControl(accessControl);
+		accessControl.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
+		File.SetAccessControl(dll_path, accessControl);
+
+		if (!File.Exists(dll_path))
+		{
+			return Result.DLLNotFound;
+		}
+
 		Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
 		if (processesByName.Length == 0)
 		{
 			return Result.ProcNotOpen;
 		}
-		for (uint num = 0u; num < processesByName.Length; num++)
+
+		IntPtr kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
+		IntPtr loadLibraryAddr = GetProcAddress(kernel32ModuleHandle, "LoadLibraryA");
+
+		byte[] bytes = Encoding.UTF8.GetBytes(dll_path + '\0'); // Include null terminator in the bytes
+
+		foreach (Process process in processesByName)
 		{
-			Process process = processesByName[num];
 			if (pid != process.Id)
 			{
-				IntPtr intPtr = OpenProcess(1082u, inhert_handle: false, process.Id);
-				if (intPtr == NULL)
+				IntPtr processHandle = OpenProcess(1082u, false, process.Id);
+				if (processHandle == IntPtr.Zero)
 				{
 					return Result.OpenProcFail;
 				}
-				IntPtr intPtr2 = VirtualAllocEx(intPtr, NULL, (IntPtr)((dll_path.Length + 1) * Marshal.SizeOf(typeof(char))), 12288u, 64u);
-				if (intPtr2 == NULL)
+
+				IntPtr remoteDllPath = VirtualAllocEx(processHandle, IntPtr.Zero, (IntPtr)bytes.Length, 0x1000 | 0x2000, 0x40);
+				if (remoteDllPath == IntPtr.Zero)
 				{
 					return Result.AllocFail;
 				}
-				byte[] bytes = Encoding.Default.GetBytes(dll_path);
-				int num2 = WriteProcessMemory(intPtr, intPtr2, bytes, (IntPtr)((dll_path.Length + 1) * Marshal.SizeOf(typeof(char))), 0);
-				if (num2 == 0 || (long)num2 == 6)
+
+				bool writeProcessMemorySuccess = WriteProcessMemory(processHandle, remoteDllPath, bytes, (IntPtr)bytes.Length, out _);
+				if (!writeProcessMemorySuccess)
 				{
 					return Result.Unknown;
 				}
-				if (CreateRemoteThread(intPtr, NULL, NULL, GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA"), intPtr2, 0u, NULL) == NULL)
+
+				IntPtr threadHandle = CreateRemoteThread(processHandle, IntPtr.Zero, IntPtr.Zero, loadLibraryAddr, remoteDllPath, 0u, IntPtr.Zero);
+				if (threadHandle == IntPtr.Zero)
 				{
 					return Result.LoadLibFail;
 				}
+
 				pid = process.Id;
-				phandle = intPtr;
+				phandle = processHandle;
 				return Result.Success;
 			}
-			if (pid == process.Id)
+			else if (pid == process.Id)
 			{
 				return Result.AlreadyInjected;
 			}
 		}
+
 		return Result.Unknown;
 	}
 
