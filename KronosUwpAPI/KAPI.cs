@@ -66,6 +66,9 @@ public class KAPI
 
 	private static Result r_inject(string dll_path)
 	{
+		Stopwatch stopwatch = new Stopwatch();
+		stopwatch.Start();
+
 		FileSecurity accessControl = File.GetAccessControl(dll_path);
 		SecurityIdentifier identity = new SecurityIdentifier("S-1-15-2-1");
 		accessControl.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
@@ -85,47 +88,109 @@ public class KAPI
 		IntPtr kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
 		IntPtr loadLibraryAddr = GetProcAddress(kernel32ModuleHandle, "LoadLibraryA");
 
-		byte[] bytes = Encoding.UTF8.GetBytes(dll_path + '\0'); // Include null terminator in the bytes
+		byte[] bytes = Encoding.ASCII.GetBytes(dll_path + '\0');
 
-		foreach (Process process in processesByName)
+		object lockObject = new object();
+		Result injectionResult = Result.Unknown;
+
+
+		if (!File.Exists(dll_path))
+		{
+			return Result.DLLNotFound;
+		}
+
+		Parallel.ForEach(processesByName, (process, loopState) =>
 		{
 			if (pid != process.Id)
 			{
 				IntPtr processHandle = OpenProcess(1082u, false, process.Id);
 				if (processHandle == IntPtr.Zero)
 				{
-					return Result.OpenProcFail;
+					lock (lockObject)
+					{
+						injectionResult = Result.OpenProcFail;
+					}
+					loopState.Break();
+					return;
 				}
 
 				IntPtr remoteDllPath = VirtualAllocEx(processHandle, IntPtr.Zero, (IntPtr)bytes.Length, 0x1000 | 0x2000, 0x40);
 				if (remoteDllPath == IntPtr.Zero)
 				{
-					return Result.AllocFail;
+					lock (lockObject)
+					{
+						injectionResult = Result.AllocFail;
+					}
+					loopState.Break();
+					return;
 				}
 
 				bool writeProcessMemorySuccess = WriteProcessMemory(processHandle, remoteDllPath, bytes, (IntPtr)bytes.Length, out _);
 				if (!writeProcessMemorySuccess)
 				{
-					return Result.Unknown;
+					lock (lockObject)
+					{
+						injectionResult = Result.Unknown;
+					}
+					loopState.Break();
+					return;
 				}
 
-				IntPtr threadHandle = CreateRemoteThread(processHandle, IntPtr.Zero, IntPtr.Zero, loadLibraryAddr, remoteDllPath, 0u, IntPtr.Zero);
+				IntPtr threadHandle = CreateRemoteThread(processHandle, IntPtr.Zero, IntPtr.Zero, loadLibraryAddr, remoteDllPath, 0x0, IntPtr.Zero);
 				if (threadHandle == IntPtr.Zero)
 				{
-					return Result.LoadLibFail;
+					lock (lockObject)
+					{
+						injectionResult = Result.LoadLibFail;
+					}
+					loopState.Break();
+					return;
 				}
 
 				pid = process.Id;
 				phandle = processHandle;
-				return Result.Success;
+				stopwatch.Stop();
+				TimeSpan elapsedTime = stopwatch.Elapsed;
+				Execute("warn('Kronos Injected Current Identity Is 8')");
+				Execute("warn('Injection Speed Was: " + elapsedTime.TotalSeconds + "')");
+				Execute("warn('Enjoy Using Kronos!')");
+				lock (lockObject)
+				{
+					injectionResult = Result.Success;
+				}
+				loopState.Stop();
+				loopState.Stop();
 			}
 			else if (pid == process.Id)
 			{
-				return Result.AlreadyInjected;
+				loopState.Break();
 			}
-		}
+		});
 
-		return Result.Unknown;
+		if (injectionResult == Result.Success)
+		{
+			return Result.Success;
+		}
+		else if (pid == 0)
+		{
+			return Result.Unknown;
+		}
+		else if (injectionResult == Result.OpenProcFail)
+		{
+			return Result.OpenProcFail;
+		}
+		else if (injectionResult == Result.AllocFail)
+		{
+			return Result.AllocFail;
+		}
+		else if (injectionResult == Result.LoadLibFail)
+		{
+			return Result.LoadLibFail;
+		}
+		else
+		{
+			return Result.AlreadyInjected;
+		}
 	}
 
 	private static Result inject_custom()
