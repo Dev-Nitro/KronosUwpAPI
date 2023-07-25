@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using IWshRuntimeLibrary;
@@ -30,7 +29,7 @@ public class KAPI
 
 	private WebClient Client = new WebClient();
 
-	private static int attempts = 0;
+	static Stopwatch stopwatch = new Stopwatch();
 
 	private static string dll_path;
 
@@ -38,16 +37,16 @@ public class KAPI
 
 	private static int pid = 0;
 
-	private static readonly IntPtr NULL = (IntPtr)0;
+	private static readonly IntPtr NULL = IntPtr.Zero;
 
-	[DllImport("kernel32.dll", SetLastError = true)]
+    	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr OpenProcess(uint access, bool inhert_handle, int pid);
 
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, IntPtr dwSize, uint flAllocationType, uint flProtect);
 
 	[DllImport("kernel32.dll", SetLastError = true)]
-	private static extern int WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, IntPtr nSize, int lpNumberOfBytesWritten);
+	private static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, IntPtr nSize, out IntPtr lpNumberOfBytesWritten);
 
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
@@ -64,20 +63,9 @@ public class KAPI
 	[DllImport("bin\\KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
 	private static extern bool is_injected(IntPtr proc, int pid, string path);
 
-	private static Result r_inject(string dll_path)
+	private static Result R_inject()
 	{
-		Stopwatch stopwatch = new Stopwatch();
 		stopwatch.Start();
-
-		FileSecurity accessControl = File.GetAccessControl(dll_path);
-		SecurityIdentifier identity = new SecurityIdentifier("S-1-15-2-1");
-		accessControl.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
-		File.SetAccessControl(dll_path, accessControl);
-
-		if (!File.Exists(dll_path))
-		{
-			return Result.DLLNotFound;
-		}
 
 		Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
 		if (processesByName.Length == 0)
@@ -150,10 +138,7 @@ public class KAPI
 				pid = process.Id;
 				phandle = processHandle;
 				stopwatch.Stop();
-				TimeSpan elapsedTime = stopwatch.Elapsed;
-				Execute("warn('Kronos Injected Current Identity Is 8')");
-				Execute("warn('Injection Speed Was: " + elapsedTime.TotalSeconds + "')");
-				Execute("warn('Enjoy Using Kronos!')");
+
 				lock (lockObject)
 				{
 					injectionResult = Result.Success;
@@ -192,50 +177,8 @@ public class KAPI
 			return Result.AlreadyInjected;
 		}
 	}
-
-	private static Result inject_custom()
-	{
-		try
-		{
-			if (!File.Exists(dll_path))
-			{
-				return Result.DLLNotFound;
-			}
-			return r_inject(dll_path);
-		}
-		catch
-		{
-			return Result.Unknown;
-		}
-	}
-
-	private static void inject()
-	{
-		switch (inject_custom())
-		{
-			case Result.DLLNotFound:
-				MessageBox.Show(new Form { TopMost = true }, "Injection Failed! DLL not found!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				break;
-			case Result.OpenProcFail:
-				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - OpenProcFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				break;
-			case Result.AllocFail:
-				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - AllocFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				break;
-			case Result.LoadLibFail:
-				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - LoadLibFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				break;
-			case Result.ProcNotOpen:
-				MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using the game from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				break;
-			case Result.Unknown:
-				MessageBox.Show(new Form { TopMost = true }, "Injection Failed - Unknown!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				break;
-			case Result.AlreadyInjected:
-				break;
-		}
-	}
-	public static bool is_injected()
+	
+    	public static bool is_injected()
 	{
 		return is_injected(phandle, pid, dll_path);
 	}
@@ -253,21 +196,25 @@ public class KAPI
 		}
 		return run_script(phandle, pid, dll_path, script);
 	}
+	
 	public static bool Execute(string script)
 	{
 		try
 		{
+			Console.WriteLine("Checking Windows10Universal Process Length");
 			if (Process.GetProcessesByName("Windows10Universal").Length < 1)
 			{
 				MessageBox.Show(new Form { TopMost = true }, "Please open Microsoft Store Version of ROBLOX before executing.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				return false;
 			}
+			Console.WriteLine("Checking Injection Status");
 			if (!is_injected())
 			{
 				MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				return false;
 			}
 			run_script(script);
+			Console.WriteLine("Script Executed");
 			return true;
 		}
 		catch
@@ -275,61 +222,64 @@ public class KAPI
 			return false;
 		}
 	}
-	public static Task<bool> Inject()
+	public static async Task<bool> Inject()
 	{
-		TaskCompletionSource<bool> result = new TaskCompletionSource<bool>();
-		try
+		if (!is_injected())
 		{
-			new Thread((ThreadStart)async delegate
+			try
 			{
-				attempts = 0;
-				Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
-				if (processesByName.Length < 1)
+
+                		Console.WriteLine("Checking Injection Status");
+				await Task.Delay(50);
+				Console.WriteLine("Confirming DLL Path");
+				await Task.Delay(50);
+				Console.WriteLine("Gaining Secure Folder Access");
+				await Task.Delay(50);
+
+				FileSecurity accessControl = File.GetAccessControl(dll_path);
+				SecurityIdentifier identity = new SecurityIdentifier("S-1-15-2-1");
+				accessControl.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
+				File.SetAccessControl(dll_path, accessControl);
+
+				Console.WriteLine("Attempting Injection...");
+				switch (R_inject())
 				{
-					MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using Roblox from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-					result.SetResult(result: false);
-				}
-				else
-				{
-					if (!is_injected())
-					{
-						try
-						{
-							inject();
-							while (!is_injected() && attempts <= 5)
-							{
-								attempts++;
-								await Task.Delay(500);
-							}
-							if (attempts >= 5)
-							{
-								MessageBox.Show(new Form { TopMost = true }, "KAPI is taking longer then normal to Inject. Maybe try reinjecting?", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-								result.SetResult(result: false);
-							}
-							else
-							{
-								result.SetResult(result: true);
-							}
-							return;
-						}
-						catch (Exception ex)
-						{
-							MessageBox.Show(ex.ToString());
-							result.SetResult(result: false);
-							return;
-						}
-					}
-					MessageBox.Show(new Form { TopMost = true }, "Already Injected!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-					result.SetResult(result: false);
-				}
-			}).Start();
-			return result.Task;
+				case Result.DLLNotFound:
+                        		MessageBox.Show(new Form { TopMost = true }, "Injection Failed! DLL not found!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        		return false;
+                    		case Result.OpenProcFail:
+                        		MessageBox.Show(new Form { TopMost = true }, "Injection Failed - OpenProcFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        		return false;
+                    		case Result.AllocFail:
+                    		    MessageBox.Show(new Form { TopMost = true }, "Injection Failed - AllocFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    		    return false;
+                    		case Result.LoadLibFail:
+                    		    MessageBox.Show(new Form { TopMost = true }, "Injection Failed - LoadLibFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    		    return false;
+                   		 case Result.ProcNotOpen:
+                   		     MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using the game from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    		    return false;
+                    		case Result.Unknown:
+                   		     MessageBox.Show(new Form { TopMost = true }, "Injection Failed - Unknown!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                   		     return false;
+                   		 case Result.AlreadyInjected:
+                   		     break;
+				case Result.Success:
+                        		TimeSpan elapsedTime = stopwatch.Elapsed;
+                        		Console.WriteLine("UWP Injection Success");
+					Console.WriteLine("Injection Time: " + elapsedTime.TotalSeconds.ToString());
+                        		return true;
+                		}
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show(new Form { TopMost = true }, ex.ToString(), "KAPI Injection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                		return false;
+			}
 		}
-		catch
-		{
-			result.SetResult(result: false);
-			return result.Task;
-		}
+
+		MessageBox.Show(new Form { TopMost = true }, "Already Injected!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+		return false;
 	}
 	private string ReadURL(string url)
 	{
@@ -345,7 +295,7 @@ public class KAPI
 			bool WrdDownload = (bool)downloadtype["WrdDownload"];
 
 			if (WrdDownload)
-            {
+			{
 				string text = ReadURL("https://cdn.wearedevs.net/software/jjsploit/latestdata.txt");
 				if (text.Length <= 0)
 				{
@@ -353,10 +303,10 @@ public class KAPI
 				}
 				latestDataCache = JObject.Parse(text);
 			}
-            else
-            {
+			else
+			{
 				latestDataCache = downloadtype;
-            }
+			}
 		}
 		return latestDataCache;
 	}
@@ -364,11 +314,13 @@ public class KAPI
 
 	private static string ApiPath = "bin\\KFluxAPI.dll";
 	public void DownloadLatestDll()
-    {
-        try
-        {
+	{
+		try
+		{
+			Console.WriteLine("Checking bin Creation");
 			Directory.CreateDirectory("bin");
-			string text = (string)GetLatestData()["exploit-module"][(object)"download"];
+			Console.WriteLine("Downloading Module");
+			string text = (string)GetLatestData()["dll"]["downloadurl"];
 			if (text.Length > 0)
 			{
 				if (File.Exists(DLLPath))
@@ -380,13 +332,14 @@ public class KAPI
 			JObject latestData = GetLatestData();
 			if (!File.Exists(ApiPath))
 			{
-				Client.DownloadFile((string)latestData["injDep"], ApiPath);
+				Client.DownloadFile((string)latestData["ui"]["injDep"], ApiPath);
 			}
 		}
-        catch(Exception ex)
-        {
+		catch (Exception ex)
+		{
 			MessageBox.Show(new Form { TopMost = true }, "Failed to download 1 or more files\n" + ex.ToString(), "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
+		Console.WriteLine("Creating Workspace and Autoexec Folders");
 		create_files(Path.GetFullPath(DLLPath));
 	}
 
