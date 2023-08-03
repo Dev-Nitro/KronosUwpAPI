@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -27,8 +28,6 @@ public class KAPI
 		Unknown
 	}
 
-	private WebClient Client = new WebClient();
-
 	static Stopwatch stopwatch = new Stopwatch();
 
 	private static string dll_path;
@@ -39,7 +38,7 @@ public class KAPI
 
 	private static readonly IntPtr NULL = IntPtr.Zero;
 
-    	[DllImport("kernel32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr OpenProcess(uint access, bool inhert_handle, int pid);
 
 	[DllImport("kernel32.dll", SetLastError = true)]
@@ -177,8 +176,7 @@ public class KAPI
 			return Result.AlreadyInjected;
 		}
 	}
-	
-    	public static bool is_injected()
+    public static bool is_injected()
 	{
 		return is_injected(phandle, pid, dll_path);
 	}
@@ -196,7 +194,6 @@ public class KAPI
 		}
 		return run_script(phandle, pid, dll_path, script);
 	}
-	
 	public static bool Execute(string script)
 	{
 		try
@@ -229,7 +226,7 @@ public class KAPI
 			try
 			{
 
-                		Console.WriteLine("Checking Injection Status");
+                Console.WriteLine("Checking Injection Status");
 				await Task.Delay(50);
 				Console.WriteLine("Confirming DLL Path");
 				await Task.Delay(50);
@@ -244,37 +241,37 @@ public class KAPI
 				Console.WriteLine("Attempting Injection...");
 				switch (R_inject())
 				{
-				case Result.DLLNotFound:
-                        		MessageBox.Show(new Form { TopMost = true }, "Injection Failed! DLL not found!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        		return false;
-                    		case Result.OpenProcFail:
-                        		MessageBox.Show(new Form { TopMost = true }, "Injection Failed - OpenProcFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        		return false;
-                    		case Result.AllocFail:
-                    		    MessageBox.Show(new Form { TopMost = true }, "Injection Failed - AllocFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    		    return false;
-                    		case Result.LoadLibFail:
-                    		    MessageBox.Show(new Form { TopMost = true }, "Injection Failed - LoadLibFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    		    return false;
-                   		 case Result.ProcNotOpen:
-                   		     MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using the game from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    		    return false;
-                    		case Result.Unknown:
-                   		     MessageBox.Show(new Form { TopMost = true }, "Injection Failed - Unknown!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                   		     return false;
-                   		 case Result.AlreadyInjected:
-                   		     break;
-				case Result.Success:
-                        		TimeSpan elapsedTime = stopwatch.Elapsed;
-                        		Console.WriteLine("UWP Injection Success");
-					Console.WriteLine("Injection Time: " + elapsedTime.TotalSeconds.ToString());
-                        		return true;
-                		}
+					case Result.DLLNotFound:
+                        MessageBox.Show(new Form { TopMost = true }, "Injection Failed! DLL not found!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
+                    case Result.OpenProcFail:
+                        MessageBox.Show(new Form { TopMost = true }, "Injection Failed - OpenProcFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
+                    case Result.AllocFail:
+                        MessageBox.Show(new Form { TopMost = true }, "Injection Failed - AllocFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
+                    case Result.LoadLibFail:
+                        MessageBox.Show(new Form { TopMost = true }, "Injection Failed - LoadLibFail failed!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
+                    case Result.ProcNotOpen:
+                        MessageBox.Show(new Form { TopMost = true }, "Failure to find UWP game!\n\nPlease make sure you are using the game from the Microsoft Store and not the browser!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
+                    case Result.Unknown:
+                        MessageBox.Show(new Form { TopMost = true }, "Injection Failed - Unknown!\n", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
+                    case Result.AlreadyInjected:
+                        break;
+					case Result.Success:
+                        TimeSpan elapsedTime = stopwatch.Elapsed;
+                        Console.WriteLine("UWP Injection Success");
+						Console.WriteLine("Injection Time: " + elapsedTime.TotalSeconds.ToString());
+                        return true;
+                }
 			}
 			catch (Exception ex)
 			{
 				MessageBox.Show(new Form { TopMost = true }, ex.ToString(), "KAPI Injection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                		return false;
+                return false;
 			}
 		}
 
@@ -283,67 +280,122 @@ public class KAPI
 	}
 	private string ReadURL(string url)
 	{
-		return Client.DownloadString(url);
-	}
-	private JObject latestDataCache;
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        using (var webClient = new WebClient())
+        {
+            webClient.Headers.Add(HttpRequestHeader.UserAgent, "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
+            return webClient.DownloadString(url);
+        }
+    }
+
+    private static readonly string ApiUrl = "https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json";
+
+    private static readonly string WrdUrl = "https://cdn.wearedevs.net/software/jjsploit/latestdata.txt";
+
+    private JObject latestDataCache;
 	private JObject GetLatestData()
 	{
-		if (latestDataCache == null)
-		{
-			string apidownload = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
-			JObject downloadtype = JObject.Parse(apidownload);
-			bool WrdDownload = (bool)downloadtype["WrdDownload"];
+        if (latestDataCache == null)
+        {
+            string apidownload = ReadURL(ApiUrl);
+            JObject downloadtype = JObject.Parse(apidownload);
+            bool WrdDownload = (bool)downloadtype["WrdDownload"];
 
-			if (WrdDownload)
-			{
-				string text = ReadURL("https://cdn.wearedevs.net/software/jjsploit/latestdata.txt");
-				if (text.Length <= 0)
-				{
-					text = ReadURL("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json");
-				}
-				latestDataCache = JObject.Parse(text);
-			}
-			else
-			{
-				latestDataCache = downloadtype;
-			}
-		}
-		return latestDataCache;
-	}
-	private static string DLLPath = "bin\\Module.dll";
+            string text;
 
-	private static string ApiPath = "bin\\KFluxAPI.dll";
-	public void DownloadLatestDll()
-	{
-		try
-		{
-			Console.WriteLine("Checking bin Creation");
-			Directory.CreateDirectory("bin");
-			Console.WriteLine("Downloading Module");
-			string text = (string)GetLatestData()["dll"]["downloadurl"];
-			if (text.Length > 0)
-			{
-				if (File.Exists(DLLPath))
-				{
-					File.Delete(DLLPath);
-				}
-				Client.DownloadFile(text, DLLPath);
-			}
-			JObject latestData = GetLatestData();
-			if (!File.Exists(ApiPath))
-			{
-				Client.DownloadFile((string)latestData["ui"]["injDep"], ApiPath);
-			}
-		}
-		catch (Exception ex)
-		{
-			MessageBox.Show(new Form { TopMost = true }, "Failed to download 1 or more files\n" + ex.ToString(), "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-		}
-		Console.WriteLine("Creating Workspace and Autoexec Folders");
-		create_files(Path.GetFullPath(DLLPath));
-	}
+            if (WrdDownload)
+            {
+                text = ReadURL(WrdUrl);
+                if (string.IsNullOrEmpty(text))
+                {
+                    text = apidownload;
+                }
+            }
+            else
+            {
+                text = apidownload;
+            }
 
-	private static void create_files(string dll_path_)
+            latestDataCache = JObject.Parse(text);
+        }
+
+        return latestDataCache;
+    }
+
+    private static readonly string binFolderPath = "bin";
+
+    private static readonly string dllPath = Path.Combine(binFolderPath, "Module.dll");
+
+    private static readonly string apiPath = Path.Combine(binFolderPath, "KFluxAPI.dll");
+
+    public async Task DownloadLatestDll()
+    {
+        try
+        {
+            Directory.CreateDirectory(binFolderPath);
+
+            Console.WriteLine("Downloading Module");
+
+            JObject latestData = GetLatestData();
+
+            string dllDownloadUrl = (string)latestData["dll"]["downloadurl"];
+            if (!string.IsNullOrEmpty(dllDownloadUrl))
+            {
+                if (File.Exists(dllPath))
+                {
+                    File.Delete(dllPath);
+                }
+
+                using (var httpClient = new HttpClient())
+                {
+                    httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
+
+                    var dllResponse = await httpClient.GetAsync(dllDownloadUrl);
+                    dllResponse.EnsureSuccessStatusCode();
+                    using (var dllStream = await dllResponse.Content.ReadAsStreamAsync())
+                    using (var fileStream = new FileStream(dllPath, FileMode.Create, FileAccess.Write))
+                    {
+                        await dllStream.CopyToAsync(fileStream);
+                    }
+                }
+            }
+
+            if (!File.Exists(apiPath))
+            {
+                string apiDownloadUrl = (string)latestData["ui"]["injDep"];
+
+                using (var httpClient = new HttpClient())
+                {
+                    httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
+
+                    var apiResponse = await httpClient.GetAsync(apiDownloadUrl);
+                    apiResponse.EnsureSuccessStatusCode();
+                    using (var apiStream = await apiResponse.Content.ReadAsStreamAsync())
+                    using (var fileStream = new FileStream(apiPath, FileMode.Create, FileAccess.Write))
+                    {
+                        await apiStream.CopyToAsync(fileStream);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle the exception and show an error message
+            string errorMessage = "Failed to download one or more files.\n";
+            errorMessage += "Exception Type: " + ex.GetType().FullName + "\n";
+            errorMessage += "Message: " + ex.Message + "\n";
+            if (ex.InnerException != null)
+            {
+                errorMessage += "Inner Exception: " + ex.InnerException.Message + "\n";
+            }
+            MessageBox.Show(new Form { TopMost = true }, errorMessage, "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        Console.WriteLine("Creating Workspace and Autoexec Folders");
+        Create_files(Path.GetFullPath(dllPath));
+    }
+
+	private static void Create_files(string dll_path_)
 	{
 		if (!File.Exists(dll_path_))
 		{
@@ -403,5 +455,5 @@ public class KAPI
 			obj3.TargetPath = text4;
 			obj3.Save();
 		}
-	}
+    }
 }
