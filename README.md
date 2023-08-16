@@ -1,3 +1,4 @@
 KAPI Made By TeamKronos Features 98% UNC
 
-EXAMPLE ON HOW TO USE: ![image](https://github.com/Dev-Nitro/KronosUwpAPI/assets/66803517/7f5370d4-56de-4722-ae7d-0e753390c2b0)
+EXAMPLE ON HOW TO USE: ![image](https://github.com/Dev-Nitro/KronosUwpAPI/assets/66803517/5b0d021c-94c1-4b60-a74e-8ae8b852eeb6)
+
