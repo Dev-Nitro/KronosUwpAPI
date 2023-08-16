@@ -6,17 +6,20 @@ using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
+using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using IWshRuntimeLibrary;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using File = System.IO.File;
 
 public class KAPI
 {
-	private enum Result : uint
+    #region Injection, Execution and AlreadyInjected
+    private enum Result : uint
 	{
 		Success,
 		DLLNotFound,
@@ -64,7 +67,6 @@ public class KAPI
 
 	private static Result R_inject()
 	{
-		stopwatch.Start();
 
 		Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
 		if (processesByName.Length == 0)
@@ -85,8 +87,9 @@ public class KAPI
 		{
 			return Result.DLLNotFound;
 		}
+        stopwatch.Start();
 
-		Parallel.ForEach(processesByName, (process, loopState) =>
+        Parallel.ForEach(processesByName, (process, loopState) =>
 		{
 			if (pid != process.Id)
 			{
@@ -134,9 +137,9 @@ public class KAPI
 					return;
 				}
 
-				pid = process.Id;
+                stopwatch.Stop();
+                pid = process.Id;
 				phandle = processHandle;
-				stopwatch.Stop();
 
 				lock (lockObject)
 				{
@@ -219,6 +222,15 @@ public class KAPI
 			return false;
 		}
 	}
+	private static string init()
+	{
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        using (var webClient = new WebClient())
+        {
+            webClient.Headers.Add(HttpRequestHeader.UserAgent, "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
+            return webClient.DownloadString("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/Lua/init.lua").ToString();
+        }
+    }
 	public static async Task<bool> Inject()
 	{
 		if (!is_injected())
@@ -262,6 +274,7 @@ public class KAPI
                     case Result.AlreadyInjected:
                         break;
 					case Result.Success:
+                        Execute(init());
                         TimeSpan elapsedTime = stopwatch.Elapsed;
                         Console.WriteLine("UWP Injection Success");
 						Console.WriteLine("Injection Time: " + elapsedTime.TotalSeconds.ToString());
@@ -278,8 +291,186 @@ public class KAPI
 		MessageBox.Show(new Form { TopMost = true }, "Already Injected!", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		return false;
 	}
-	private string ReadURL(string url)
-	{
+    #endregion
+
+
+    #region Download Latest Dll/Api and create workspace and autoexec folders 
+
+
+    private static readonly string binFolderPath = "bin";
+
+    private static readonly string dlJsonPath = Path.Combine(binFolderPath, "dl.json");
+
+    private static readonly string dllPath = Path.Combine(binFolderPath, "Module.dll");
+
+    private static readonly string apiPath = Path.Combine(binFolderPath, "KFluxAPI.dll");
+
+    private static readonly string ApiUrl = "https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json";
+
+    private static readonly string WrdUrl = "https://cdn.wearedevs.net/software/jjsploit/latestdata.txt";
+
+    private JObject latestDataCache;
+
+    public async Task DownloadLatestDll()
+    {
+        try
+        {
+            Directory.CreateDirectory(binFolderPath);
+
+            // Delete dl.json if it exists to ensure the latest data is fetched
+            if (File.Exists(dlJsonPath))
+            {
+                File.Delete(dlJsonPath);
+            }
+
+            Console.WriteLine("Downloading Module");
+
+            JObject latestData = GetLatestData();
+
+            string moduleDownloadUrl, apiDownloadUrl;
+
+            // Fetch the download links from the latestData object
+            moduleDownloadUrl = (string)latestData["dll"]["downloadurl"];
+            apiDownloadUrl = (string)latestData["ui"]["injDep"];
+
+            // Generate the encryption key only once
+            byte[] encryptionKey = GetEncryptionKey();
+
+            Console.WriteLine("Saving download links to encrypted JSON file (dl.json)");
+
+            // Save the download links to an encrypted JSON file
+            SaveDownloadLinksToEncryptedJson(moduleDownloadUrl, apiDownloadUrl, encryptionKey);
+
+            Console.WriteLine("Reading download links from encrypted JSON file (dl.json)");
+
+            // Read the download links from the encrypted JSON file
+            (moduleDownloadUrl, apiDownloadUrl) = ReadDownloadLinksFromEncryptedJson(encryptionKey);
+
+            Console.WriteLine("Downloading Module.dll");
+
+            // Download and save the Module.dll
+            if (File.Exists(dllPath))
+            {
+                File.Delete(dllPath);
+            }
+            await DownloadAndSaveDll(moduleDownloadUrl, dllPath);
+
+            Console.WriteLine("Downloading KFluxAPI.dll (if not already present)");
+
+            // Download and save the KFluxAPI.dll (if it doesn't exist already)
+            if (!File.Exists(apiPath))
+            {
+                await DownloadAndSaveDll(apiDownloadUrl, apiPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            string errorMessage = "Failed to download one or more files.\n";
+            errorMessage += "Exception Type: " + ex.GetType().FullName + "\n";
+            errorMessage += "Message: " + ex.Message + "\n";
+            if (ex.InnerException != null)
+            {
+                errorMessage += "Inner Exception: " + ex.InnerException.Message + "\n";
+            }
+            Console.WriteLine(errorMessage);
+        }
+
+        Console.WriteLine("Creating Workspace and Autoexec Folders");
+        Create_files(Path.GetFullPath(dllPath));
+    }
+
+    private void SaveDownloadLinksToEncryptedJson(string moduleDownloadUrl, string apiDownloadUrl, byte[] encryptionKey)
+    {
+        var downloadLinks = new
+        {
+            ModuleUrl = moduleDownloadUrl,
+            ApiUrl = apiDownloadUrl
+        };
+
+        string json = JsonConvert.SerializeObject(downloadLinks);
+        byte[] encryptedData = Encrypt(json, encryptionKey);
+        File.WriteAllBytes(dlJsonPath, encryptedData);
+    }
+
+    private (string ModuleUrl, string ApiUrl) ReadDownloadLinksFromEncryptedJson(byte[] encryptionKey)
+    {
+        byte[] encryptedData = File.ReadAllBytes(dlJsonPath);
+        string decryptedJson = Decrypt(encryptedData, encryptionKey);
+        var downloadLinks = JsonConvert.DeserializeObject<dynamic>(decryptedJson);
+
+        return (downloadLinks.ModuleUrl, downloadLinks.ApiUrl);
+    }
+
+    private static byte[] GetEncryptionKey()
+    {
+        using (var rng = new RNGCryptoServiceProvider())
+        {
+            byte[] key = new byte[32]; // 32 bytes for a 256-bit key
+            rng.GetBytes(key);
+            return key;
+        }
+    }
+
+    private byte[] Encrypt(string plainText, byte[] key)
+    {
+        using (Aes aesAlg = Aes.Create())
+        {
+            aesAlg.Key = key;
+            aesAlg.GenerateIV();
+
+            ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV);
+
+            using (MemoryStream msEncrypt = new MemoryStream())
+            {
+                using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
+                {
+                    using (StreamWriter swEncrypt = new StreamWriter(csEncrypt))
+                    {
+                        swEncrypt.Write(plainText);
+                    }
+                }
+
+                byte[] iv = aesAlg.IV;
+                byte[] encrypted = msEncrypt.ToArray();
+                byte[] result = new byte[iv.Length + encrypted.Length];
+                Buffer.BlockCopy(iv, 0, result, 0, iv.Length);
+                Buffer.BlockCopy(encrypted, 0, result, iv.Length, encrypted.Length);
+
+                return result;
+            }
+        }
+    }
+
+    private string Decrypt(byte[] cipherText, byte[] key)
+    {
+        using (Aes aesAlg = Aes.Create())
+        {
+            aesAlg.Key = key;
+            byte[] iv = new byte[aesAlg.BlockSize / 8];
+            byte[] encrypted = new byte[cipherText.Length - iv.Length];
+
+            Buffer.BlockCopy(cipherText, 0, iv, 0, iv.Length);
+            Buffer.BlockCopy(cipherText, iv.Length, encrypted, 0, encrypted.Length);
+
+            aesAlg.IV = iv;
+
+            ICryptoTransform decryptor = aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
+
+            using (MemoryStream msDecrypt = new MemoryStream(encrypted))
+            {
+                using (CryptoStream csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read))
+                {
+                    using (StreamReader srDecrypt = new StreamReader(csDecrypt))
+                    {
+                        return srDecrypt.ReadToEnd();
+                    }
+                }
+            }
+        }
+    }
+
+    private string ReadURL(string url)
+    {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         using (var webClient = new WebClient())
         {
@@ -288,13 +479,8 @@ public class KAPI
         }
     }
 
-    private static readonly string ApiUrl = "https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/KronosUwpApiData.json";
-
-    private static readonly string WrdUrl = "https://cdn.wearedevs.net/software/jjsploit/latestdata.txt";
-
-    private JObject latestDataCache;
-	private JObject GetLatestData()
-	{
+    private JObject GetLatestData()
+    {
         if (latestDataCache == null)
         {
             string apidownload = ReadURL(ApiUrl);
@@ -322,80 +508,23 @@ public class KAPI
         return latestDataCache;
     }
 
-    private static readonly string binFolderPath = "bin";
-
-    private static readonly string dllPath = Path.Combine(binFolderPath, "Module.dll");
-
-    private static readonly string apiPath = Path.Combine(binFolderPath, "KFluxAPI.dll");
-
-    public async Task DownloadLatestDll()
+    private async Task DownloadAndSaveDll(string downloadUrl, string filePath)
     {
-        try
+        using (var httpClient = new HttpClient())
         {
-            Directory.CreateDirectory(binFolderPath);
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
 
-            Console.WriteLine("Downloading Module");
-
-            JObject latestData = GetLatestData();
-
-            string dllDownloadUrl = (string)latestData["dll"]["downloadurl"];
-            if (!string.IsNullOrEmpty(dllDownloadUrl))
+            var dllResponse = await httpClient.GetAsync(downloadUrl);
+            dllResponse.EnsureSuccessStatusCode();
+            using (var dllStream = await dllResponse.Content.ReadAsStreamAsync())
+            using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
             {
-                if (File.Exists(dllPath))
-                {
-                    File.Delete(dllPath);
-                }
-
-                using (var httpClient = new HttpClient())
-                {
-                    httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
-
-                    var dllResponse = await httpClient.GetAsync(dllDownloadUrl);
-                    dllResponse.EnsureSuccessStatusCode();
-                    using (var dllStream = await dllResponse.Content.ReadAsStreamAsync())
-                    using (var fileStream = new FileStream(dllPath, FileMode.Create, FileAccess.Write))
-                    {
-                        await dllStream.CopyToAsync(fileStream);
-                    }
-                }
-            }
-
-            if (!File.Exists(apiPath))
-            {
-                string apiDownloadUrl = (string)latestData["ui"]["injDep"];
-
-                using (var httpClient = new HttpClient())
-                {
-                    httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)");
-
-                    var apiResponse = await httpClient.GetAsync(apiDownloadUrl);
-                    apiResponse.EnsureSuccessStatusCode();
-                    using (var apiStream = await apiResponse.Content.ReadAsStreamAsync())
-                    using (var fileStream = new FileStream(apiPath, FileMode.Create, FileAccess.Write))
-                    {
-                        await apiStream.CopyToAsync(fileStream);
-                    }
-                }
+                await dllStream.CopyToAsync(fileStream);
             }
         }
-        catch (Exception ex)
-        {
-            // Handle the exception and show an error message
-            string errorMessage = "Failed to download one or more files.\n";
-            errorMessage += "Exception Type: " + ex.GetType().FullName + "\n";
-            errorMessage += "Message: " + ex.Message + "\n";
-            if (ex.InnerException != null)
-            {
-                errorMessage += "Inner Exception: " + ex.InnerException.Message + "\n";
-            }
-            MessageBox.Show(new Form { TopMost = true }, errorMessage, "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-
-        Console.WriteLine("Creating Workspace and Autoexec Folders");
-        Create_files(Path.GetFullPath(dllPath));
     }
 
-	private static void Create_files(string dll_path_)
+    private static void Create_files(string dll_path_)
 	{
 		if (!File.Exists(dll_path_))
 		{
@@ -456,4 +585,5 @@ public class KAPI
 			obj3.Save();
 		}
     }
+    #endregion
 }
