@@ -146,7 +146,6 @@ public class KAPI
 					injectionResult = Result.Success;
 				}
 				loopState.Stop();
-				loopState.Stop();
 			}
 			else if (pid == process.Id)
 			{
@@ -188,7 +187,7 @@ public class KAPI
 	{
 		if (pid == 0)
 		{
-			MessageBox.Show(new Form { TopMost = true }, "Please press Inject first!", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return false;
 		}
 		if (script == string.Empty)
@@ -208,11 +207,6 @@ public class KAPI
 				return false;
 			}
 			Console.WriteLine("Checking Injection Status");
-			if (!is_injected())
-			{
-				MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI Injection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				return false;
-			}
 			run_script(script);
 			Console.WriteLine("Script Executed");
 			return true;
