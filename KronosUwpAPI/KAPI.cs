@@ -34,8 +34,8 @@ public class KAPI
 
 	private struct ModuleInformation
 	{
-		public string ModuleUrl { set; }
-		public string ApiUrl { set; }
+		public string ModuleUrl { get; set; }
+		public string ApiUrl { get; set; }
 	}
 
 	static Stopwatch stopwatch = new Stopwatch();
@@ -158,7 +158,7 @@ public class KAPI
 
 	[Obsolete("Use IsInjected instead as it follows C#'s naming convention.")]
 #pragma warning disable IDE1006 // Disable wrong naming convention warning
-	public static bool is_injected() => is_injected(phandle, pid, dll_path);
+	public static bool is_injected() => IsInjected();
 	public static bool IsInjected() => is_injected(phandle, pid, dll_path);
 
 	[Obsolete("Use RunScript instead as it follows C#'s naming convention.")]
