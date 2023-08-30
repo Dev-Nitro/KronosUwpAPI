@@ -19,6 +19,7 @@ using File = System.IO.File;
 public class KAPI
 {
 	#region Injection, Execution and AlreadyInjected
+
 	private enum Result : uint
 	{
 		Success,
@@ -31,6 +32,12 @@ public class KAPI
 		Unknown
 	}
 
+	private struct ModuleInformation
+	{
+		public string ModuleUrl { set; }
+		public string ApiUrl { set; }
+	}
+
 	static Stopwatch stopwatch = new Stopwatch();
 
 	private static string dll_path;
@@ -38,8 +45,6 @@ public class KAPI
 	private static IntPtr phandle;
 
 	private static int pid = 0;
-
-	private static readonly IntPtr NULL = IntPtr.Zero;
 
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr OpenProcess(uint access, bool inhert_handle, int pid);
@@ -70,9 +75,7 @@ public class KAPI
 
 		Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
 		if (processesByName.Length == 0)
-		{
 			return Result.ProcNotOpen;
-		}
 
 		IntPtr kernel32ModuleHandle = GetModuleHandle("kernel32.dll");
 		IntPtr loadLibraryAddr = GetProcAddress(kernel32ModuleHandle, "LoadLibraryA");
@@ -84,98 +87,98 @@ public class KAPI
 
 
 		if (!File.Exists(dll_path))
-		{
 			return Result.DLLNotFound;
-		}
+
 		stopwatch.Start();
 
 		Parallel.ForEach(processesByName, (process, loopState) =>
 		{
-			if (pid != process.Id)
-			{
-				IntPtr processHandle = OpenProcess(1082u, false, process.Id);
-				if (processHandle == IntPtr.Zero)
-				{
-					lock (lockObject)
-					{
-						injectionResult = Result.OpenProcFail;
-					}
-					loopState.Break();
-					return;
-				}
-
-				IntPtr remoteDllPath = VirtualAllocEx(processHandle, IntPtr.Zero, (IntPtr)bytes.Length, 0x1000 | 0x2000, 0x40);
-				if (remoteDllPath == IntPtr.Zero)
-				{
-					lock (lockObject)
-					{
-						injectionResult = Result.AllocFail;
-					}
-					loopState.Break();
-					return;
-				}
-
-				bool writeProcessMemorySuccess = WriteProcessMemory(processHandle, remoteDllPath, bytes, (IntPtr)bytes.Length, out _);
-				if (!writeProcessMemorySuccess)
-				{
-					lock (lockObject)
-					{
-						injectionResult = Result.Unknown;
-					}
-					loopState.Break();
-					return;
-				}
-
-				IntPtr threadHandle = CreateRemoteThread(processHandle, IntPtr.Zero, IntPtr.Zero, loadLibraryAddr, remoteDllPath, 0x0, IntPtr.Zero);
-				if (threadHandle == IntPtr.Zero)
-				{
-					lock (lockObject)
-					{
-						injectionResult = Result.LoadLibFail;
-					}
-					loopState.Break();
-					return;
-				}
-
-				stopwatch.Stop();
-				pid = process.Id;
-				phandle = processHandle;
-
-				lock (lockObject)
-				{
-					injectionResult = Result.Success;
-				}
-				loopState.Stop();
-			}
-			else if (pid == process.Id)
+			if (pid == process.Id)
 			{
 				loopState.Break();
 			}
+			IntPtr processHandle = OpenProcess(1082u, false, process.Id);
+			if (processHandle == IntPtr.Zero)
+			{
+				lock (lockObject)
+				{
+					injectionResult = Result.OpenProcFail;
+				}
+				loopState.Break();
+				return;
+			}
+
+			IntPtr remoteDllPath = VirtualAllocEx(processHandle, IntPtr.Zero, (IntPtr)bytes.Length, 0x1000 | 0x2000, 0x40);
+			if (remoteDllPath == IntPtr.Zero)
+			{
+				lock (lockObject)
+				{
+					injectionResult = Result.AllocFail;
+				}
+				loopState.Break();
+				return;
+			}
+
+			bool writeProcessMemorySuccess = WriteProcessMemory(processHandle, remoteDllPath, bytes, (IntPtr)bytes.Length, out _);
+			if (!writeProcessMemorySuccess)
+			{
+				lock (lockObject)
+				{
+					injectionResult = Result.Unknown;
+				}
+				loopState.Break();
+				return;
+			}
+
+			IntPtr threadHandle = CreateRemoteThread(processHandle, IntPtr.Zero, IntPtr.Zero, loadLibraryAddr, remoteDllPath, 0x0, IntPtr.Zero);
+			if (threadHandle == IntPtr.Zero)
+			{
+				lock (lockObject)
+				{
+					injectionResult = Result.LoadLibFail;
+				}
+				loopState.Break();
+				return;
+			}
+
+			stopwatch.Stop();
+			pid = process.Id;
+			phandle = processHandle;
+
+			lock (lockObject)
+			{
+				injectionResult = Result.Success;
+			}
+			loopState.Stop();
 		});
 
-
 		if (pid == 0) return Result.Unknown;
-
 		return injectionResult;
 	}
-	public static bool is_injected()
-	{
-		return is_injected(phandle, pid, dll_path);
-	}
 
-	private static bool run_script(string script)
+	[Obsolete("Use IsInjected instead as it follows C#'s naming convention.")]
+#pragma warning disable IDE1006 // Disable wrong naming convention warning
+	public static bool is_injected() => is_injected(phandle, pid, dll_path);
+	public static bool IsInjected() => is_injected(phandle, pid, dll_path);
+
+	[Obsolete("Use RunScript instead as it follows C#'s naming convention.")]
+	private static bool run_script(string script) => RunScript(script);
+#pragma warning restore IDE1006 // Restore wrong naming convention warning
+
+	private static bool RunScript(string script)
 	{
 		if (pid == 0)
 		{
 			MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return false;
 		}
+
 		if (script == string.Empty)
-		{
-			return is_injected();
-		}
+			return IsInjected();
+
 		return run_script(phandle, pid, dll_path, script);
 	}
+
 	public static bool Execute(string script)
 	{
 		try
@@ -187,7 +190,7 @@ public class KAPI
 				return false;
 			}
 			Console.WriteLine("Checking Injection Status");
-			run_script(script);
+			RunScript(script);
 			Console.WriteLine("Script Executed");
 			return true;
 		}
@@ -196,7 +199,8 @@ public class KAPI
 			return false;
 		}
 	}
-	private static string init()
+
+	private static string GetInitScript()
 	{
 		ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 		using (var webClient = new WebClient())
@@ -205,6 +209,7 @@ public class KAPI
 			return webClient.DownloadString("https://raw.githubusercontent.com/Dev-Nitro/KronosUwpFiles/main/Lua/init.lua").ToString();
 		}
 	}
+
 	public static async Task<bool> Inject()
 	{
 		if (is_injected())
@@ -216,12 +221,14 @@ public class KAPI
 		try
 		{
 
-			Console.WriteLine("Checking Injection Status");
-			await Task.Delay(50);
-			Console.WriteLine("Confirming DLL Path");
-			await Task.Delay(50);
-			Console.WriteLine("Gaining Secure Folder Access");
-			await Task.Delay(50);
+			// are you braindead - alawapr, who commented the code below
+
+			//Console.WriteLine("Checking Injection Status");
+			//await Task.Delay(50);
+			//Console.WriteLine("Confirming DLL Path");
+			//await Task.Delay(50);
+			//Console.WriteLine("Gaining Secure Folder Access");
+			//await Task.Delay(50);
 
 			FileSecurity accessControl = File.GetAccessControl(dll_path);
 			SecurityIdentifier identity = new SecurityIdentifier("S-1-15-2-1");
@@ -252,7 +259,7 @@ public class KAPI
 				case Result.AlreadyInjected:
 					break;
 				case Result.Success:
-					Execute(init());
+					Execute(GetInitScript());
 					TimeSpan elapsedTime = stopwatch.Elapsed;
 					Console.WriteLine("UWP Injection Success");
 					Console.WriteLine("Injection Time: " + elapsedTime.TotalSeconds.ToString());
@@ -267,9 +274,7 @@ public class KAPI
 	}
 	#endregion
 
-
 	#region Download Latest Dll/Api and create workspace and autoexec folders 
-
 
 	private static readonly string binFolderPath = "bin";
 
@@ -353,26 +358,24 @@ public class KAPI
 		Create_files(Path.GetFullPath(dllPath));
 	}
 
-	private void SaveDownloadLinksToEncryptedJson(string moduleDownloadUrl, string apiDownloadUrl, byte[] encryptionKey)
+	private void SaveDownloadLinksToEncryptedJson(ModuleInformation moduleInformation, byte[] encryptionKey)
 	{
-		var downloadLinks = new
-		{
-			ModuleUrl = moduleDownloadUrl,
-			ApiUrl = apiDownloadUrl
-		};
-
-		string json = JsonConvert.SerializeObject(downloadLinks);
+		string json = JsonConvert.SerializeObject(moduleInformation);
 		byte[] encryptedData = Encrypt(json, encryptionKey);
 		File.WriteAllBytes(dlJsonPath, encryptedData);
 	}
 
-	private (string ModuleUrl, string ApiUrl) ReadDownloadLinksFromEncryptedJson(byte[] encryptionKey)
+	private ModuleInformation ReadDownloadLinksFromEncryptedJson(byte[] encryptionKey)
 	{
 		byte[] encryptedData = File.ReadAllBytes(dlJsonPath);
 		string decryptedJson = Decrypt(encryptedData, encryptionKey);
 		var downloadLinks = JsonConvert.DeserializeObject<dynamic>(decryptedJson);
 
-		return (downloadLinks.ModuleUrl, downloadLinks.ApiUrl);
+		return new ModuleInformation
+		{
+			ModuleUrl = ModuleUrl,
+			ApiUrl = ApiUrl
+		};
 	}
 
 	private static byte[] GetEncryptionKey()
@@ -498,14 +501,17 @@ public class KAPI
 		}
 	}
 
-	private static void Create_files(string dll_path_)
+	[Obsolete("Use CreateFiles instead as it follows C#'s naming convention.")]
+	private static void Create_files(string dll_path) => CreateFiles(dll_path);
+
+	private static void CreateFiles(string dll_path)
 	{
-		if (!File.Exists(dll_path_))
+		if (!File.Exists(dll_path))
 		{
-			MessageBox.Show(new Form { TopMost = true }, "Failure to initalize API!\nDLL path was invalid!", "Fatal Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show(new Form { TopMost = true }, "Failure to initialize API!\nDLL path was invalid!", "Fatal Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			Environment.Exit(0);
 		}
-		dll_path = dll_path_;
+		KAPI.dll_path = dll_path;
 		string text = "";
 		string[] directories = Directory.GetDirectories(Environment.GetEnvironmentVariable("LocalAppData") + "\\Packages");
 		foreach (string text2 in directories)
@@ -532,7 +538,7 @@ public class KAPI
 		}
 		catch
 		{
-			MessageBox.Show(new Form { TopMost = true }, "Failure to Create new Folders", "KAPI Download", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			MessageBox.Show(new Form { TopMost = true }, "Failed to create new folders", "KAPI Download", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
 		string text3 = Path.Combine(text, "workspace");
 		string text4 = Path.Combine(text, "autoexec");
