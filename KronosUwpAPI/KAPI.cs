@@ -355,7 +355,7 @@ public class KAPI
 		}
 
 		Console.WriteLine("Creating Workspace and Autoexec Folders");
-		Create_files(Path.GetFullPath(dllPath));
+		CreateFiles(Path.GetFullPath(dllPath));
 	}
 
 	private void SaveDownloadLinksToEncryptedJson(ModuleInformation moduleInformation, byte[] encryptionKey)
@@ -500,9 +500,6 @@ public class KAPI
 			}
 		}
 	}
-
-	[Obsolete("Use CreateFiles instead as it follows C#'s naming convention.")]
-	private static void Create_files(string dll_path) => CreateFiles(dll_path);
 
 	private static void CreateFiles(string dll_path)
 	{
