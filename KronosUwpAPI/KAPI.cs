@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -34,8 +35,11 @@ public class KAPI
 		ProcNotOpen,
 		Unknown
 	}
+    private static string Pipe = "WRDPipe";
 
-	static Stopwatch stopwatch = new Stopwatch();
+    private static string PipePath;
+
+    static Stopwatch stopwatch = new Stopwatch();
 
 	private static string dll_path;
 
@@ -62,12 +66,6 @@ public class KAPI
 
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttribute, IntPtr dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
-
-	[DllImport("bin\\KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
-	private static extern bool run_script(IntPtr proc, int pid, string path, [MarshalAs(UnmanagedType.LPWStr)] string script);
-
-	[DllImport("bin\\KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
-	private static extern bool is_injected(IntPtr proc, int pid, string path);
 
 	private static Result InjectDLL()
 	{
@@ -163,22 +161,32 @@ public class KAPI
 	}
     public static bool IsInjected()
 	{
-        return is_injected(phandle, pid, dll_path);
+        return NamedPipeExist(Pipe);
     }
 
     private static bool RunScript(string script)
 	{
-		if (pid == 0)
+		if (!IsInjected())
 		{
 			MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return false;
 		}
 		if (script == string.Empty)
 		{
-			return IsInjected();
+			return true;
 		}
-		return run_script(phandle, pid, dll_path, script);
-	}
+        using (NamedPipeClientStream namedPipeClientStream = new NamedPipeClientStream(".", PipePath, PipeDirection.Out))
+        {
+            namedPipeClientStream.Connect();
+            using (StreamWriter streamWriter = new StreamWriter(namedPipeClientStream, Encoding.Default, 999999))
+            {
+                streamWriter.Write(script);
+                streamWriter.Dispose();
+            }
+            namedPipeClientStream.Dispose();
+            return true;
+        }
+    }
 	public static bool Execute(string script)
 	{
 		try
@@ -199,7 +207,20 @@ public class KAPI
 			return false;
 		}
 	}
-	private static string GetInitScript()
+    private static bool NamedPipeExist(string pipeName)
+    {
+        string[] files = Directory.GetFiles("\\\\.\\pipe\\");
+        foreach (string text in files)
+        {
+            if (text.Contains(pipeName))
+            {
+                PipePath = text.Replace("\\\\.\\pipe\\", "");
+                return true;
+            }
+        }
+        return false;
+    }
+    private static string GetInitScript()
 	{
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         using (var webClient = new WebClient())
@@ -318,10 +339,10 @@ public class KAPI
 
             Console.WriteLine("Downloading KFluxAPI.dll (if not already present)");
 
-            if (!File.Exists(apiPath))
-            {
-                await DownloadAndSaveDll(apiDownloadUrl, apiPath);
-            }
+            //if (!File.Exists(apiPath))
+            //{
+            //    await DownloadAndSaveDll(apiDownloadUrl, apiPath);
+            //}
         }
         catch (Exception ex)
         {
