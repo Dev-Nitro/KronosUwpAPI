@@ -20,7 +20,7 @@ using File = System.IO.File;
 public class KAPI
 {
     //Developed By TeamKronos
-    //Uses Dll Provided By Fluxus
+    //Uses Dll Provided By JJsploit
     //Credit to Alawapr for some help
 
     #region Injection, Execution and AlreadyInjected
