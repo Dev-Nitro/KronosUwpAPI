@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Pipes;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -20,10 +19,6 @@ using File = System.IO.File;
 public class KAPI
 {
     //Developed By TeamKronos
-    //Uses Dll Provided By JJsploit
-    //Credit to Alawapr for some help
-
-    #region Injection, Execution and AlreadyInjected
     private enum Result : uint
 	{
 		Success,
@@ -35,9 +30,6 @@ public class KAPI
 		ProcNotOpen,
 		Unknown
 	}
-    private static string Pipe = "WRDPipe";
-
-    private static string PipePath;
 
     static Stopwatch stopwatch = new Stopwatch();
 
@@ -67,7 +59,13 @@ public class KAPI
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttribute, IntPtr dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
 
-	private static Result InjectDLL()
+    [DllImport("bin/KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern bool run_script(IntPtr proc, int pid, string path, [MarshalAs(UnmanagedType.LPWStr)] string script);
+
+    [DllImport("bin/KFluxAPI.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern bool is_injected(IntPtr proc, int pid, string path);
+
+    private static Result InjectDLL()
 	{
         //Check if Roblox is open
 		Process[] processesByName = Process.GetProcessesByName("Windows10Universal");
@@ -161,7 +159,7 @@ public class KAPI
 	}
     public static bool IsInjected()
 	{
-        return NamedPipeExist(Pipe);
+        return is_injected(phandle, pid, dll_path);
     }
 
     private static bool RunScript(string script)
@@ -171,21 +169,11 @@ public class KAPI
 			MessageBox.Show(new Form { TopMost = true }, "Please inject before executing a script.", "KAPI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return false;
 		}
-		if (script == string.Empty)
-		{
-			return true;
-		}
-        using (NamedPipeClientStream namedPipeClientStream = new NamedPipeClientStream(".", PipePath, PipeDirection.Out))
+        if (script == string.Empty)
         {
-            namedPipeClientStream.Connect();
-            using (StreamWriter streamWriter = new StreamWriter(namedPipeClientStream, Encoding.Default, 999999))
-            {
-                streamWriter.Write(script);
-                streamWriter.Dispose();
-            }
-            namedPipeClientStream.Dispose();
-            return true;
+            return IsInjected();
         }
+        return run_script(phandle, pid, dll_path, script);
     }
 	public static bool Execute(string script)
 	{
@@ -207,19 +195,6 @@ public class KAPI
 			return false;
 		}
 	}
-    private static bool NamedPipeExist(string pipeName)
-    {
-        string[] files = Directory.GetFiles("\\\\.\\pipe\\");
-        foreach (string text in files)
-        {
-            if (text.Contains(pipeName))
-            {
-                PipePath = text.Replace("\\\\.\\pipe\\", "");
-                return true;
-            }
-        }
-        return false;
-    }
     private static string GetInitScript()
 	{
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -279,11 +254,69 @@ public class KAPI
         }
         return Task.FromResult(false);
     }
-    #endregion
+    private static void CreateShortcutOnDesktop(string shortcutName)
+    {
+        string shortcutLocation = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + $"\\{shortcutName}.lnk";
+        string targetFile = Path.GetFullPath("bin\\KAPI.Launcher.exe"); ;
 
+        WshShell shell = new WshShell();
+        IWshShortcut shortcut = (IWshShortcut)shell.CreateShortcut(shortcutLocation);
+        shortcut.Description = $"{shortcutName}";
+        shortcut.TargetPath = targetFile;
+        shortcut.Save();
+    }
+    private static async Task CreateShortcut(string shortcutName)
+    {
+        try
+        {
+            string shortcutLocation = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + $"\\{shortcutName}.lnk";
+            if (File.Exists(shortcutLocation))
+            {
+                return;
+            }
 
-    #region Download Latest Dll/Api and create workspace and autoexec folders 
+            CreateShortcutOnDesktop(shortcutName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(new Form { TopMost = true }, $"Error Launching KAPI Client\n{ex.Message}", "KAPI Launcher Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+    }
+    public static async Task<bool> LaunchKronosClient()
+    {
+        try
+        {
 
+            Directory.CreateDirectory("bin");
+            string kapiLauncherPath = "bin\\KAPI.Launcher.exe";
+            if (!File.Exists(kapiLauncherPath))
+            {
+                using (var client = new WebClient())
+                {
+                    string downloadLink = "https://github.com/Dev-Nitro/KronosUwpFiles/raw/main/Files/KAPI.Launcher.exe";
+                    Console.WriteLine("Downloading KAPI.Launcher.exe...");
+                    client.DownloadFile(downloadLink, kapiLauncherPath);
+                }
+            }
+            await CreateShortcut("KAPI Client");
+
+            string consoleAppDirectory = Path.GetDirectoryName(kapiLauncherPath);
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                WorkingDirectory = consoleAppDirectory,
+                FileName = kapiLauncherPath,
+                UseShellExecute = false
+            };
+            Process.Start(startInfo);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(new Form { TopMost = true }, $"Error Launching KAPI Client\n{ex.Message}", "KAPI Launcher Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
+        }
+    }
 
     private static readonly string binFolderPath = "bin";
 
@@ -339,10 +372,10 @@ public class KAPI
 
             Console.WriteLine("Downloading KFluxAPI.dll (if not already present)");
 
-            //if (!File.Exists(apiPath))
-            //{
-            //    await DownloadAndSaveDll(apiDownloadUrl, apiPath);
-            //}
+            if (!File.Exists(apiPath))
+            {
+                await DownloadAndSaveDll(apiDownloadUrl, apiPath);
+            }
         }
         catch (Exception ex)
         {
@@ -566,5 +599,4 @@ public class KAPI
 			obj3.Save();
 		}
     }
-    #endregion
 }
